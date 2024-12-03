@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+var BUILTINS = map[string]struct{}{
+	"exit": {},
+	"echo": {},
+	"type": {},
+}
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -30,6 +36,15 @@ func handleInput(input string) {
 		os.Exit(0)
 	case "echo":
 		fmt.Println(input[5:])
+	case "type":
+		if len(cmds) < 2 {
+			fmt.Println("Empty type command")
+		}
+		if _, ok := BUILTINS[cmds[1]]; ok {
+			fmt.Printf("%s is a shell builtin\n", cmds[1])
+		} else {
+			fmt.Printf("%s: not found\n", cmds[1])
+		}
 	default:
 		fmt.Printf("%s: not found\n", input)
 	}
