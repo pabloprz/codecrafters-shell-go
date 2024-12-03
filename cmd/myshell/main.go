@@ -13,6 +13,7 @@ var BUILTINS = map[string]struct{}{
 	"exit": {},
 	"echo": {},
 	"type": {},
+	"pwd":  {},
 }
 var PATH []string = make([]string, 0)
 
@@ -39,21 +40,10 @@ func handleInput(input string) {
 		os.Exit(0)
 	case "echo":
 		fmt.Println(input[5:])
+	case "pwd":
+		executePwd()
 	case "type":
-		if len(cmds) < 2 {
-			fmt.Println("Empty type command")
-			return
-		}
-		if _, ok := BUILTINS[cmds[1]]; ok {
-			fmt.Printf("%s is a shell builtin\n", cmds[1])
-			return
-		}
-		cmdPath, err := exec.LookPath(cmds[1])
-		if err != nil {
-			fmt.Printf("%s: %s\n", cmds[1], "not found")
-			return
-		}
-		fmt.Printf("%s is %s\n", cmds[1], cmdPath)
+		executeType(cmds[1:])
 	default:
 		cmd := exec.Command(cmds[0], cmds[1:]...)
 		output, err := cmd.Output()
@@ -68,6 +58,31 @@ func handleInput(input string) {
 
 		fmt.Println(strings.TrimSpace(string(output)))
 	}
+}
+
+func executePwd() {
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(dir)
+}
+
+func executeType(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Empty type command")
+		return
+	}
+	if _, ok := BUILTINS[args[0]]; ok {
+		fmt.Printf("%s is a shell builtin\n", args[0])
+		return
+	}
+	cmdPath, err := exec.LookPath(args[0])
+	if err != nil {
+		fmt.Printf("%s: %s\n", args[0], "not found")
+		return
+	}
+	fmt.Printf("%s is %s\n", args[0], cmdPath)
 }
 
 func initializePath() {
