@@ -23,10 +23,16 @@ func main() {
 }
 
 func handleInput(input string) {
-	if strings.HasPrefix(input, "exit") {
+	cmds := strings.Fields(input)
+
+	switch cmds[0] {
+	case "exit":
 		os.Exit(0)
+	case "echo":
+		fmt.Println(input[5:])
+	default:
+		fmt.Printf("%s: not found\n", input)
 	}
-	fmt.Printf("%s: not found\n", input)
 }
 
 func readInput(scanner *bufio.Scanner) (string, error) {
