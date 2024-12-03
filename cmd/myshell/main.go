@@ -13,8 +13,10 @@ var BUILTINS = map[string]struct{}{
 	"echo": {},
 	"type": {},
 }
+var PATH []string = make([]string, 0)
 
 func main() {
+	initializePath()
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
@@ -39,15 +41,40 @@ func handleInput(input string) {
 	case "type":
 		if len(cmds) < 2 {
 			fmt.Println("Empty type command")
+			return
 		}
 		if _, ok := BUILTINS[cmds[1]]; ok {
 			fmt.Printf("%s is a shell builtin\n", cmds[1])
-		} else {
-			fmt.Printf("%s: not found\n", cmds[1])
+			return
 		}
+		cmdpath, err := lookUpCommand(cmds[1])
+		if err != nil {
+			fmt.Printf("%s: %s\n", cmds[1], err.Error())
+			return
+		}
+		fmt.Printf("%s is %s\n", cmds[1], cmdpath)
 	default:
 		fmt.Printf("%s: not found\n", input)
 	}
+}
+
+func lookUpCommand(cmd string) (string, error) {
+	for _, path := range PATH {
+		cmdPath := path + string(os.PathSeparator) + cmd
+		if _, err := os.Stat(cmdPath); err == nil {
+			return cmdPath, nil
+		}
+	}
+	return "", errors.New("not found")
+}
+
+func initializePath() {
+	pathStr := os.Getenv("PATH")
+	if pathStr == "" {
+		return
+	}
+
+	PATH = strings.Split(pathStr, ":")
 }
 
 func readInput(scanner *bufio.Scanner) (string, error) {
