@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -47,25 +48,26 @@ func handleInput(input string) {
 			fmt.Printf("%s is a shell builtin\n", cmds[1])
 			return
 		}
-		cmdpath, err := lookUpCommand(cmds[1])
+		cmdPath, err := exec.LookPath(cmds[1])
 		if err != nil {
-			fmt.Printf("%s: %s\n", cmds[1], err.Error())
+			fmt.Printf("%s: %s\n", cmds[1], "not found")
 			return
 		}
-		fmt.Printf("%s is %s\n", cmds[1], cmdpath)
+		fmt.Printf("%s is %s\n", cmds[1], cmdPath)
 	default:
-		fmt.Printf("%s: not found\n", input)
-	}
-}
-
-func lookUpCommand(cmd string) (string, error) {
-	for _, path := range PATH {
-		cmdPath := path + string(os.PathSeparator) + cmd
-		if _, err := os.Stat(cmdPath); err == nil {
-			return cmdPath, nil
+		cmd := exec.Command(cmds[0], cmds[1:]...)
+		output, err := cmd.Output()
+		if err != nil {
+			if strings.Contains(err.Error(), "executable file not found in $PATH") {
+				fmt.Printf("%s: not found\n", input)
+			} else {
+				fmt.Println("error executing command: ", err)
+			}
+			return
 		}
+
+		fmt.Println(strings.TrimSpace(string(output)))
 	}
-	return "", errors.New("not found")
 }
 
 func initializePath() {
