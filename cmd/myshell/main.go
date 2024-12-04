@@ -17,6 +17,12 @@ var BUILTINS = map[string]struct{}{
 	"pwd":  {},
 	"cd":   {},
 }
+
+var DOUBLE_SPECIAL_CHARS = map[rune]struct{}{
+	'$':  {},
+	'\\': {},
+	'"':  {},
+}
 var PATH []string = make([]string, 0)
 
 func main() {
@@ -138,7 +144,7 @@ func parseInput(input string) []string {
 	tokens := make([]string, 0)
 
 	for i := 0; i < len(input); {
-		isSingle, isDouble := false, false
+		isSingle, isDouble, innerDouble := false, false, false
 		for i < len(input) && unicode.IsSpace(rune(input[i])) {
 			i++
 		}
@@ -163,18 +169,45 @@ func parseInput(input string) []string {
 			if !isSingle && !isDouble && unicode.IsSpace(curr) {
 				break
 			}
-			if isSingle && curr == '\'' || isDouble && curr == '"' {
+			if isSingle && curr == '\'' {
 				// skip over the trailing quote and break
 				i++
 				break
 			}
-			if !isSingle && !isDouble && rune(input[i]) == '\\' {
+			if isDouble && curr == '"' {
+				if !innerDouble {
+					i++
+					break
+				}
+				// if innerdouble, we can ignore this quote
+				i++
+				continue
+			}
+			if !isSingle && !isDouble && curr == '\\' {
 				i++
 				if i < len(input) {
 					sb.WriteByte(input[i])
 					i++
 				}
 				continue
+			}
+			if isDouble && rune(input[i]) == '\\' {
+				i++
+				curr = rune(input[i])
+				if i < len(input) {
+					if _, ok := DOUBLE_SPECIAL_CHARS[curr]; ok {
+						if curr == '"' {
+							innerDouble = !innerDouble
+						}
+
+						sb.WriteByte(input[i])
+					} else {
+						sb.WriteByte(input[i-1])
+						sb.WriteByte(input[i])
+					}
+					i++
+					continue
+				}
 			}
 			sb.WriteByte(input[i])
 			i++
