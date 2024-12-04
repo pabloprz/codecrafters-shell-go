@@ -14,6 +14,7 @@ var BUILTINS = map[string]struct{}{
 	"echo": {},
 	"type": {},
 	"pwd":  {},
+	"cd":   {},
 }
 var PATH []string = make([]string, 0)
 
@@ -44,6 +45,8 @@ func handleInput(input string) {
 		executePwd()
 	case "type":
 		executeType(cmds[1:])
+	case "cd":
+		executeCd(cmds[1:])
 	default:
 		cmd := exec.Command(cmds[0], cmds[1:]...)
 		output, err := cmd.Output()
@@ -57,6 +60,21 @@ func handleInput(input string) {
 		}
 
 		fmt.Println(strings.TrimSpace(string(output)))
+	}
+}
+
+func executeCd(args []string) {
+	if len(args) == 0 {
+		return
+	}
+
+	err := os.Chdir(args[0])
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			fmt.Printf("cd: %s: No such file or directory\n", args[0])
+			return
+		}
+		fmt.Printf("cd: %s: %s\n", args[0], err.Error())
 	}
 }
 
