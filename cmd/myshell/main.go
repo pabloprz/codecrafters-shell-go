@@ -68,6 +68,10 @@ func executeCd(args []string) {
 		return
 	}
 
+	if args[0] == "~" {
+		args[0] = os.Getenv("HOME")
+	}
+
 	err := os.Chdir(args[0])
 	if err != nil {
 		if strings.Contains(err.Error(), "no such file or directory") {
