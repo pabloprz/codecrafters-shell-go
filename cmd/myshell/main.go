@@ -155,25 +155,32 @@ func parseInput(input string) []string {
 			i++
 		}
 
-		j := i
-		for j < len(input) {
-			curr := rune(input[j])
+		var sb strings.Builder
+
+		for i < len(input) {
+			curr := rune(input[i])
 			// will finish when a space is found unles we are inside quotes
 			if !isSingle && !isDouble && unicode.IsSpace(curr) {
 				break
 			}
 			if isSingle && curr == '\'' || isDouble && curr == '"' {
+				// skip over the trailing quote and break
+				i++
 				break
 			}
-			j++
+			if !isSingle && !isDouble && rune(input[i]) == '\\' {
+				i++
+				if i < len(input) {
+					sb.WriteByte(input[i])
+					i++
+				}
+				continue
+			}
+			sb.WriteByte(input[i])
+			i++
 		}
 
-		tokens = append(tokens, input[i:j])
-		if isSingle || isDouble {
-			// skip over the closing quote
-			j++
-		}
-		i = j
+		tokens = append(tokens, sb.String())
 	}
 	return tokens
 }
