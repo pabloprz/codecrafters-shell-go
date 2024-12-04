@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"unicode"
 )
 
 var BUILTINS = map[string]struct{}{
@@ -34,13 +35,20 @@ func main() {
 }
 
 func handleInput(input string) {
-	cmds := strings.Fields(input)
+	cmds := parseInput(input)
 
 	switch cmds[0] {
 	case "exit":
 		os.Exit(0)
 	case "echo":
-		fmt.Println(input[5:])
+		for i, cmd := range cmds[1:] {
+			if i == len(cmds)-2 {
+				fmt.Print(cmd)
+			} else {
+				fmt.Printf("%s ", cmd)
+			}
+		}
+		fmt.Print("\n")
 	case "pwd":
 		executePwd()
 	case "type":
@@ -124,4 +132,48 @@ func readInput(scanner *bufio.Scanner) (string, error) {
 		return "", errors.New("Empty input")
 	}
 	return input, nil
+}
+
+func parseInput(input string) []string {
+	tokens := make([]string, 0)
+
+	for i := 0; i < len(input); {
+		isSingle, isDouble := false, false
+		for i < len(input) && unicode.IsSpace(rune(input[i])) {
+			i++
+		}
+
+		if i >= len(input) {
+			break
+		}
+
+		if rune(input[i]) == '\'' {
+			isSingle = true
+			i++
+		} else if rune(input[i]) == '"' {
+			isDouble = true
+			i++
+		}
+
+		j := i
+		for j < len(input) {
+			curr := rune(input[j])
+			// will finish when a space is found unles we are inside quotes
+			if !isSingle && !isDouble && unicode.IsSpace(curr) {
+				break
+			}
+			if isSingle && curr == '\'' || isDouble && curr == '"' {
+				break
+			}
+			j++
+		}
+
+		tokens = append(tokens, input[i:j])
+		if isSingle || isDouble {
+			// skip over the closing quote
+			j++
+		}
+		i = j
+	}
+	return tokens
 }
