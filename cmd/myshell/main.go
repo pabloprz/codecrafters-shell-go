@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,13 @@ import (
 	"strings"
 	"unicode"
 )
+
+type output struct {
+	stdOut    string
+	stdErr    string
+	appendOut bool
+	appendErr bool
+}
 
 var BUILTINS = map[string]struct{}{
 	"exit": {},
@@ -23,6 +31,16 @@ var DOUBLE_SPECIAL_CHARS = map[rune]struct{}{
 	'\\': {},
 	'"':  {},
 }
+
+var REDIRECTS = map[string]struct{}{
+	">":   {},
+	"1>":  {},
+	"2>":  {},
+	">>":  {},
+	"1>>": {},
+	"2>>": {},
+}
+
 var PATH []string = make([]string, 0)
 
 func main() {
@@ -41,45 +59,92 @@ func main() {
 }
 
 func handleInput(input string) {
-	cmds := parseInput(input)
+	cmds, redir := parseInput(input)
 
 	switch cmds[0] {
 	case "exit":
 		os.Exit(0)
 	case "echo":
+		var sb strings.Builder
 		for i, cmd := range cmds[1:] {
 			if i == len(cmds)-2 {
-				fmt.Print(cmd)
+				sb.WriteString(cmd)
 			} else {
-				fmt.Printf("%s ", cmd)
+				sb.WriteString(fmt.Sprintf("%s ", cmd))
 			}
 		}
-		fmt.Print("\n")
+		printResult(sb.String(), nil, redir)
 	case "pwd":
-		executePwd()
+		res, err := executePwd()
+		printResult(res, err, redir)
 	case "type":
-		executeType(cmds[1:])
+		res, err := executeType(cmds[1:])
+		printResult(res, err, redir)
 	case "cd":
-		executeCd(cmds[1:])
+		res, err := executeCd(cmds[1:])
+		printResult(res, err, redir)
 	default:
 		cmd := exec.Command(cmds[0], cmds[1:]...)
-		output, err := cmd.Output()
+		var out bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr
+		err := cmd.Run()
 		if err != nil {
 			if strings.Contains(err.Error(), "executable file not found in $PATH") {
-				fmt.Printf("%s: not found\n", input)
+				printResult("", errors.New(fmt.Sprintf("%s: not found", input)), redir)
 			} else {
-				fmt.Println("error executing command: ", err)
+				printResult("", errors.New(strings.TrimSpace(stderr.String())), redir)
 			}
+		}
+
+		output := out.Bytes()
+		if len(output) == 0 {
 			return
 		}
 
-		fmt.Println(strings.TrimSpace(string(output)))
+		printResult(strings.TrimSpace(string(output)), nil, redir)
 	}
 }
 
-func executeCd(args []string) {
-	if len(args) == 0 {
+func printResult(res string, err error, output output) {
+	if err != nil {
+		if output.stdErr == "" {
+			fmt.Println(err)
+		} else {
+			openFileAndWrite(output.stdErr, output, err.Error())
+		}
+	}
+	if res != "" {
+		if output.stdOut == "" {
+			fmt.Println(res)
+		} else {
+			openFileAndWrite(output.stdOut, output, res)
+		}
+	}
+}
+
+func openFileAndWrite(filename string, output output, content string) {
+	flags := os.O_RDWR | os.O_CREATE
+	if output.appendOut || output.appendErr {
+		flags = os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	}
+
+	file, err := os.OpenFile(filename, flags, 0o777)
+	if err != nil {
+		fmt.Println(err)
 		return
+	}
+
+	defer file.Close()
+	if _, err = file.WriteString("\n" + content); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func executeCd(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", nil
 	}
 
 	if args[0] == "~" {
@@ -89,36 +154,33 @@ func executeCd(args []string) {
 	err := os.Chdir(args[0])
 	if err != nil {
 		if strings.Contains(err.Error(), "no such file or directory") {
-			fmt.Printf("cd: %s: No such file or directory\n", args[0])
-			return
+			return "", errors.New(fmt.Sprintf("cd: %s: No such file or directory", args[0]))
 		}
-		fmt.Printf("cd: %s: %s\n", args[0], err.Error())
+		return "", errors.New(fmt.Sprintf("cd: %s: %s", args[0], err.Error()))
 	}
+	return "", nil
 }
 
-func executePwd() {
+func executePwd() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		fmt.Println(err)
+		return "", err
 	}
-	fmt.Println(dir)
+	return dir, nil
 }
 
-func executeType(args []string) {
+func executeType(args []string) (string, error) {
 	if len(args) == 0 {
-		fmt.Println("Empty type command")
-		return
+		return "", errors.New("Empty type command")
 	}
 	if _, ok := BUILTINS[args[0]]; ok {
-		fmt.Printf("%s is a shell builtin\n", args[0])
-		return
+		return fmt.Sprintf("%s is a shell builtin", args[0]), nil
 	}
 	cmdPath, err := exec.LookPath(args[0])
 	if err != nil {
-		fmt.Printf("%s: %s\n", args[0], "not found")
-		return
+		return fmt.Sprintf("%s: %s", args[0], "not found"), nil
 	}
-	fmt.Printf("%s is %s\n", args[0], cmdPath)
+	return fmt.Sprintf("%s is %s", args[0], cmdPath), nil
 }
 
 func initializePath() {
@@ -140,7 +202,7 @@ func readInput(scanner *bufio.Scanner) (string, error) {
 	return input, nil
 }
 
-func parseInput(input string) []string {
+func parseInput(input string) ([]string, output) {
 	tokens := make([]string, 0)
 
 	for i := 0; i < len(input); {
@@ -215,5 +277,37 @@ func parseInput(input string) []string {
 
 		tokens = append(tokens, sb.String())
 	}
-	return tokens
+
+	finalTokens := make([]string, 0)
+	output := output{}
+	for i := 0; i < len(tokens); {
+		t := tokens[i]
+		if _, ok := REDIRECTS[t]; ok {
+			if i == len(tokens)-1 {
+				continue
+			}
+
+			sendTo := tokens[i+1]
+			switch t {
+			case ">", "1>":
+				output.stdOut = sendTo
+				output.appendOut = false
+			case "2>":
+				output.stdErr = sendTo
+				output.appendErr = false
+			case ">>", "1>>":
+				output.stdOut = sendTo
+				output.appendOut = true
+			case "2>>":
+				output.stdErr = sendTo
+				output.appendOut = true
+			}
+			i += 2
+		} else {
+			finalTokens = append(finalTokens, t)
+			i++
+		}
+
+	}
+	return finalTokens, output
 }
