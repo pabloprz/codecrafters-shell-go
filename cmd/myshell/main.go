@@ -107,37 +107,57 @@ func handleInput(input string) {
 	}
 }
 
-func printResult(res string, err error, output output) {
+func printResult(res string, error error, output output) {
+	file, err := openFile(output)
 	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if file != nil {
+		defer file.Close()
+	}
+
+	if error != nil {
 		if output.stdErr == "" {
-			fmt.Println(err)
+			fmt.Println(error)
 		} else {
-			openFileAndWrite(output.stdErr, output, err.Error())
+			writeToFile(file, error.Error())
 		}
 	}
 	if res != "" {
 		if output.stdOut == "" {
 			fmt.Println(res)
 		} else {
-			openFileAndWrite(output.stdOut, output, res)
+			writeToFile(file, res)
 		}
 	}
 }
 
-func openFileAndWrite(filename string, output output, content string) {
+func openFile(output output) (*os.File, error) {
+	if output.stdErr == "" && output.stdOut == "" {
+		return nil, nil
+	}
+
 	flags := os.O_RDWR | os.O_CREATE
 	if output.appendOut || output.appendErr {
 		flags = os.O_APPEND | os.O_CREATE | os.O_WRONLY
 	}
 
-	file, err := os.OpenFile(filename, flags, 0o777)
-	if err != nil {
-		fmt.Println(err)
-		return
+	filename := output.stdErr
+	if output.stdOut != "" {
+		filename = output.stdOut
 	}
 
-	defer file.Close()
-	if _, err = file.WriteString("\n" + content); err != nil {
+	file, err := os.OpenFile(filename, flags, 0o777)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func writeToFile(file *os.File, content string) {
+	if _, err := file.WriteString("\n" + content); err != nil {
 		fmt.Println(err)
 	}
 }
